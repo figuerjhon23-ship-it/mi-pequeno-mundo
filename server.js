@@ -6,13 +6,21 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { origin: '*' }
+    cors: {
+        origin: allowedOrigins.includes('*') ? true : allowedOrigins,
+        methods: ['GET', 'POST']
+    }
 });
 
 const PORT = process.env.PORT || 3000;
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '*').split(',').map((origin) => origin.trim()).filter(Boolean);
 const players = new Map();
 
 app.use(express.static(__dirname));
+
+app.get('/health', (_req, res) => {
+    res.json({ ok: true, players: players.size, port: PORT });
+});
 
 io.on('connection', (socket) => {
     players.set(socket.id, {

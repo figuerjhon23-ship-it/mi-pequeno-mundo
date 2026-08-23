@@ -200,6 +200,7 @@ class PuebloScene extends Phaser.Scene {
         this.createCabin(5800, 5000, 'house', 'CABAÑA');
         this.createCabin(2700, 6200, 'market', 'AGRICULTOR');
         this.createCabin(6100, 6200, 'house', 'CASA');
+        this.createCityDistrict();
 
         // Lugares importantes del mapa.
         this.addImportantLandmark(1200, 3400, 'HOSPITAL', 0x6bb7ff);
@@ -233,6 +234,34 @@ class PuebloScene extends Phaser.Scene {
         this.add.text(4000, 420, 'MI PEQUEÑO MUNDO', { fontFamily: 'monospace', fontSize: '30px', color: '#fff0a8' }).setOrigin(0.5);
         this.addWall(500, 500, 7000, 30); this.addWall(7500, 4000, 30, 7000);
         this.addWall(4000, 7500, 7000, 30); this.addWall(500, 4000, 30, 7000);
+    }
+
+    createCityDistrict() {
+        const buildings = [
+            [2550, 3000, 'cottage', 'CASA'],
+            [3150, 3000, 'house', 'CASA'],
+            [3750, 3000, 'cottage', 'CASA'],
+            [2550, 3600, 'market_stall', 'MERCADO'],
+            [3150, 3600, 'cottage', 'CASA'],
+            [3750, 3600, 'cottage', 'CASA'],
+            [3000, 4600, 'well', 'POZO'],
+            [4350, 3400, 'market_stall', 'PUESTO'],
+            [4700, 3000, 'house', 'CASA'],
+            [4700, 3600, 'cottage', 'CASA']
+        ];
+
+        buildings.forEach(([x, y, key, label]) => {
+            const sprite = this.add.image(x, y, key).setDepth(3);
+            sprite.setScale(key === 'market_stall' ? 1.15 : 1.05);
+            this.add.text(x, y - 52, label, { fontFamily: 'monospace', fontSize: '10px', color: '#fff0a8' }).setOrigin(0.5);
+        });
+
+        this.add.rectangle(3150, 3350, 2300, 180, 0xd7c484).setStrokeStyle(6, 0x85643f);
+        this.add.rectangle(3150, 3350, 150, 150, 0x8a764d).setStrokeStyle(4, 0x5b3b2a);
+        this.add.text(3150, 3345, 'CENTRO', { fontFamily: 'monospace', fontSize: '11px', color: '#fff0a8' }).setOrigin(0.5);
+        this.add.image(3000, 3350, 'market_stall').setScale(1.05).setDepth(4);
+        this.add.image(3300, 3350, 'well').setScale(0.85).setDepth(4);
+        this.add.text(3150, 3680, 'CIUDAD DEL VALLE', { fontFamily: 'monospace', fontSize: '16px', color: '#fff0a8' }).setOrigin(0.5);
     }
 
     spawnSceneryProps() {
@@ -548,10 +577,31 @@ class PuebloScene extends Phaser.Scene {
     // Socket.io comparte la posicion con todos los jugadores conectados.
     connectOnline() {
         this.remotePlayers = {};
-        // GitHub Pages no ejecuta el servidor Socket.io; en ese caso el juego
-        // sigue siendo jugable en modo local sin jugadores remotos.
         if (typeof io !== 'function') return;
-        onlineSocket = io();
+
+        const serverParam = new URLSearchParams(window.location.search).get('server');
+        const preferredOrigin = serverParam || window.location.origin;
+        const socketUrl = preferredOrigin && preferredOrigin !== 'null' && preferredOrigin !== 'file://' ? preferredOrigin : undefined;
+
+        onlineSocket = socketUrl ? io(socketUrl, {
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 600
+        }) : io({
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 600
+        });
+
+        onlineSocket.on('connect', () => {
+            if (this.hudStatusText) this.hudStatusText.setText('ONLINE');
+            onlineSocket.emit('playerJoin', { name: window.currentUser });
+        });
+        onlineSocket.on('disconnect', () => {
+            if (this.hudStatusText) this.hudStatusText.setText('OFFLINE');
+        });
         onlineSocket.on('currentPlayers', (players) => {
             Object.values(players).forEach((player) => {
                 if (player.id !== onlineSocket.id) this.addRemotePlayer(player);
@@ -568,7 +618,6 @@ class PuebloScene extends Phaser.Scene {
                 delete this.remotePlayers[id];
             }
         });
-        onlineSocket.emit('playerJoin', { name: window.currentUser });
         this.lastNetworkUpdate = 0;
     }
 
@@ -595,7 +644,7 @@ class PuebloScene extends Phaser.Scene {
     createHud() {
         const panel = this.add.rectangle(240, 294, 480, 36, 0x152b34, 0.94).setScrollFactor(0);
         this.add.text(14, 286, `EXPLORADOR: ${window.currentUser}`, { fontFamily: 'monospace', fontSize: '12px', color: '#f5f0d0' }).setScrollFactor(0);
-        this.add.text(14, 303, 'FLECHAS / WASD / SHIFT  |  ONLINE', { fontFamily: 'monospace', fontSize: '10px', color: '#8ed1c5' }).setScrollFactor(0);
+        this.hudStatusText = this.add.text(14, 303, 'FLECHAS / WASD / SHIFT  |  ONLINE', { fontFamily: 'monospace', fontSize: '10px', color: '#8ed1c5' }).setScrollFactor(0);
         this.inventoryText = this.add.text(350, 303, 'OBJETOS: 0', { fontFamily: 'monospace', fontSize: '10px', color: '#f1c75b' }).setScrollFactor(0);
         this.inventoryItems = {};
         this.inventoryPanel = this.add.rectangle(240, 160, 250, 210, 0x152b34, 0.98).setStrokeStyle(4, 0xe8c96a).setScrollFactor(0).setDepth(20).setVisible(false);
