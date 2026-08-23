@@ -98,23 +98,29 @@ class PuebloScene extends Phaser.Scene {
     constructor() { super('PuebloScene'); }
 
     preload() {
-        // El collage se procesa porque contiene sprites de tamaños distintos y etiquetas.
-        this.load.image('spritesheet', 'assets/spritesheet.png');
+        // Sprites propios en SVG: ligeros, transparentes y sin puntos de color.
+        this.load.image('hero', 'assets/hero.svg');
+        this.load.image('tree', 'assets/tree.svg');
+        this.load.image('farm', 'assets/farm.svg');
+        this.load.image('crops', 'assets/crops.svg');
+        this.load.image('items', 'assets/items.svg');
     }
 
     create() {
         // Un mundo amplio, pero razonable para que funcione con fluidez en navegador.
-        this.worldSize = 5000;
+        // Mundo compacto para que los jugadores se encuentren rápidamente.
+        this.worldSize = 2000;
         this.physics.world.setBounds(0, 0, this.worldSize, this.worldSize);
-        this.prepareSpriteSheet();
+        this.prepareItemSprites();
         this.drawWorld();
         this.createPlayer();
+        this.createCollectibles();
         this.createHud();
         this.connectOnline();
         this.cameras.main.setBounds(0, 0, this.worldSize, this.worldSize);
         this.cameras.main.startFollow(this.player, true, 0.16, 0.16);
         this.cursors = this.input.keyboard.createCursorKeys();
-        this.keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT');
+        this.keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT,Q,SPACE');
     }
 
     // Genera islas, caminos, rios, bosque y volcanes sin cargar imagenes externas.
@@ -160,13 +166,63 @@ class PuebloScene extends Phaser.Scene {
         canvasTexture.add('player', 0, 24, 48, 64, 64);
     }
 
+    prepareItemSprites() {
+        const source = this.textures.get('items').getSourceImage();
+        const texture = this.textures.createCanvas('item-assets', source.width, source.height);
+        texture.context.drawImage(source, 0, 0);
+        texture.refresh();
+        texture.add('gema', 0, 0, 0, 64, 64);
+        texture.add('semilla', 0, 64, 0, 64, 64);
+        texture.add('moneda', 0, 128, 0, 64, 64);
+    }
+
     createCabin(x, y) {
         this.add.rectangle(x, y, 180, 110, 0xe9e2c0).setStrokeStyle(3, 0x473b46);
         this.add.rectangle(x, y - 58, 195, 24, 0xd95858).setStrokeStyle(2, 0x473b46);
         this.add.text(x, y - 58, 'CENTRO', { fontFamily: 'monospace', fontSize: '13px', color: '#fff4cf' }).setOrigin(0.5);
         this.add.rectangle(x, y + 30, 25, 50, 0x6d4b51);
         this.add.text(x, y + 30, 'P', { fontFamily: 'monospace', fontSize: '18px', color: '#fff4cf' }).setOrigin(0.5);
+        this.add.image(x, y, 'farm').setDepth(2);
         this.addWall(x - 95, y, 12, 110); this.addWall(x + 95, y, 12, 110); this.addWall(x, y - 65, 200, 12);
+    }
+
+    // Objetos simples del mundo que el jugador puede recoger al acercarse.
+    createCollectibles() {
+        this.inventory = 0;
+        this.collectibles = [];
+        const objects = [
+            [720, 650, 'gema'], [580, 720, 'semilla'], [850, 760, 'moneda'],
+            [1150, 450, 'gema'], [1500, 700, 'semilla']
+        ];
+        objects.forEach(([x, y, type]) => {
+            const item = this.add.image(x, y, 'item-assets', type).setScale(0.55).setDepth(4);
+            item.itemType = type;
+            item.itemLabel = this.add.text(x, y - 22, type.toUpperCase(), { fontFamily: 'monospace', fontSize: '9px', color: '#fff0a8' }).setOrigin(0.5);
+            this.collectibles.push(item);
+        });
+        this.pickupHint = this.add.text(650, 580, 'ESPACIO: RECOGER', { fontFamily: 'monospace', fontSize: '12px', color: '#10252c', backgroundColor: '#f1c75b', padding: { x: 7, y: 5 } }).setOrigin(0.5).setAlpha(0);
+        this.input.keyboard.on('keydown-SPACE', () => this.pickupNearby());
+        this.input.keyboard.on('keydown-Q', () => this.toggleInventory());
+    }
+
+    pickupNearby() {
+        const item = this.collectibles.find((candidate) => candidate.active && Phaser.Math.Distance.Between(this.player.x, this.player.y, candidate.x, candidate.y) < 42);
+        if (!item) return;
+        item.itemLabel.destroy();
+        item.destroy();
+        this.inventory += 1;
+        this.inventoryItems[item.itemType] = (this.inventoryItems[item.itemType] || 0) + 1;
+        this.inventoryText.setText(`OBJETOS: ${this.inventory}`);
+        this.inventoryPanelText.setText(this.inventorySummary());
+    }
+
+    inventorySummary() {
+        return `INVENTARIO\n\nGEMAS: ${this.inventoryItems.gema || 0}\nSEMILLAS: ${this.inventoryItems.semilla || 0}\nMONEDAS: ${this.inventoryItems.moneda || 0}\n\nPulsa Q para cerrar`;
+    }
+
+    toggleInventory() {
+        this.inventoryPanel.setVisible(!this.inventoryPanel.visible);
+        this.inventoryPanelText.setVisible(this.inventoryPanel.visible);
     }
 
     // Detalles visuales inspirados en los mapas rurales de las referencias.
@@ -175,13 +231,50 @@ class PuebloScene extends Phaser.Scene {
             this.add.rectangle(x + offsetX, y + offsetY + 30, 14, 34, 0x684632);
             this.add.circle(x + offsetX, y + offsetY, 34, 0x236b45).setStrokeStyle(3, 0x164c38);
             this.add.circle(x + offsetX - 16, y + offsetY + 8, 21, 0x328451);
+            this.add.image(x + offsetX, y + offsetY - 8, 'tree').setScale(0.72).setDepth(2);
         });
+        // Huerto de manzanas: copas verdes con frutos rojos.
+        this.add.text(x - 300, y - 365, 'HUERTO', { fontFamily: 'monospace', fontSize: '10px', color: '#fff0a8' }).setOrigin(0.5);
+        [-340, -300, -260].forEach((offsetX) => {
+            this.add.rectangle(x + offsetX, y - 330, 8, 35, 0x684632);
+            this.add.circle(x + offsetX, y - 360, 26, 0x3d8948);
+            this.add.circle(x + offsetX - 10, y - 355, 4, 0xd94b43);
+            this.add.circle(x + offsetX + 10, y - 366, 4, 0xd94b43);
+        });
+        // Cerezos con racimos rosas junto al camino.
+        this.add.text(x + 330, y + 365, 'CEREZAS', { fontFamily: 'monospace', fontSize: '10px', color: '#fff0a8' }).setOrigin(0.5);
+        [-35, 35].forEach((offsetX) => {
+            this.add.rectangle(x + 300 + offsetX, y + 330, 8, 34, 0x684632);
+            this.add.circle(x + 300 + offsetX, y + 300, 24, 0x438d4c);
+            this.add.circle(x + 290 + offsetX, y + 305, 4, 0xc93655);
+            this.add.circle(x + 310 + offsetX, y + 294, 4, 0xc93655);
+        });
+        // Dos cultivos distintos: trigo dorado y maiz alto.
+        this.add.text(x - 170, y + 340, 'TRIGO', { fontFamily: 'monospace', fontSize: '10px', color: '#fff0a8' }).setOrigin(0.5);
+        for (let row = 0; row < 3; row += 1) {
+            for (let column = 0; column < 6; column += 1) {
+                const cropX = x - 245 + column * 30;
+                const cropY = y + 370 + row * 22;
+                this.add.rectangle(cropX, cropY, 4, 16, 0xd9b443);
+                this.add.circle(cropX, cropY - 8, 5, 0xf0cf54);
+            }
+        }
+        this.add.text(x + 95, y + 340, 'MAIZ', { fontFamily: 'monospace', fontSize: '10px', color: '#fff0a8' }).setOrigin(0.5);
+        for (let row = 0; row < 3; row += 1) {
+            for (let column = 0; column < 5; column += 1) {
+                const cropX = x + 40 + column * 28;
+                const cropY = y + 370 + row * 22;
+                this.add.rectangle(cropX, cropY, 5, 18, 0x3f873e);
+                this.add.rectangle(cropX + 5, cropY - 6, 8, 5, 0xe6c83b);
+            }
+        }
         for (let index = 0; index < 12; index += 1) {
             const flowerX = x - 250 + ((index * 97) % 500);
             const flowerY = y - 245 + ((index * 61) % 490);
             this.add.circle(flowerX, flowerY, 3, index % 2 ? 0xf5d66c : 0xe5796d);
         }
         this.add.rectangle(x - 170, y + 250, 150, 90, 0x70462d).setStrokeStyle(3, 0x4d3426);
+        this.add.image(x - 170, y + 250, 'crops').setScale(0.82).setDepth(2);
         for (let row = 0; row < 3; row += 1) {
             for (let column = 0; column < 5; column += 1) {
                 this.add.circle(x - 220 + column * 25, y + 220 + row * 25, 6, 0x72b83e);
@@ -193,13 +286,15 @@ class PuebloScene extends Phaser.Scene {
 
     // El personaje usa fisica Arcade: bordes, agua y paredes bloquean el movimiento.
     createPlayer() {
-        this.player = this.add.sprite(650, 650, 'pixel-assets', 'player').setScale(0.7);
+        this.playerMarker = this.add.circle(650, 650, 18, 0xffd34e).setStrokeStyle(3, 0x5e392b);
+        this.player = this.add.image(650, 650, 'hero').setScale(0.62).setDepth(5);
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
         this.player.body.setSize(18, 25).setOffset(7, 20);
         this.player.body.setMaxVelocity(320, 320);
         this.physics.add.collider(this.player, this.walls);
         this.physics.add.collider(this.player, this.lake);
+        this.playerLabel = this.add.text(650, 615, window.currentUser, { fontFamily: 'monospace', fontSize: '12px', color: '#fff0a8', backgroundColor: '#10252c' }).setOrigin(0.5);
     }
 
     // Socket.io comparte la posicion con todos los jugadores conectados.
@@ -218,7 +313,12 @@ class PuebloScene extends Phaser.Scene {
         onlineSocket.on('playerUpdated', (player) => this.updateRemotePlayer(player));
         onlineSocket.on('playerMoved', (player) => this.updateRemotePlayer(player));
         onlineSocket.on('playerDisconnected', (id) => {
-            if (this.remotePlayers[id]) { this.remotePlayers[id].destroy(); delete this.remotePlayers[id]; }
+            if (this.remotePlayers[id]) {
+                this.remotePlayers[id].marker.destroy();
+                this.remotePlayers[id].nameLabel.destroy();
+                this.remotePlayers[id].destroy();
+                delete this.remotePlayers[id];
+            }
         });
         onlineSocket.emit('playerJoin', { name: window.currentUser });
         this.lastNetworkUpdate = 0;
@@ -227,8 +327,10 @@ class PuebloScene extends Phaser.Scene {
     addRemotePlayer(player) {
         if (!onlineSocket || player.id === onlineSocket.id) return;
         if (!this.remotePlayers[player.id]) {
-            const remote = this.add.sprite(player.x, player.y, 'pixel-assets', 'player').setScale(0.7).setTint(0x63d6cb);
+            const marker = this.add.circle(player.x, player.y, 18, 0x63d6cb).setStrokeStyle(3, 0x174b4a);
+            const remote = this.add.image(player.x, player.y, 'hero').setScale(0.62).setTint(0x9be1dc).setDepth(5);
             remote.nameLabel = this.add.text(player.x, player.y - 35, player.name || 'Explorador', { fontFamily: 'monospace', fontSize: '11px', color: '#ffffff', backgroundColor: '#10252c' }).setOrigin(0.5);
+            remote.marker = marker;
             this.remotePlayers[player.id] = remote;
         }
         this.updateRemotePlayer(player);
@@ -238,13 +340,18 @@ class PuebloScene extends Phaser.Scene {
         const remote = this.remotePlayers[player.id];
         if (!remote) { this.addRemotePlayer(player); return; }
         remote.setPosition(player.x, player.y);
+        remote.marker.setPosition(player.x, player.y);
         remote.nameLabel.setPosition(player.x, player.y - 35).setText(player.name || 'Explorador');
     }
 
     createHud() {
         const panel = this.add.rectangle(240, 294, 480, 36, 0x152b34, 0.94).setScrollFactor(0);
         this.add.text(14, 286, `EXPLORADOR: ${window.currentUser}`, { fontFamily: 'monospace', fontSize: '12px', color: '#f5f0d0' }).setScrollFactor(0);
-        this.add.text(14, 303, 'FLECHAS / WASD  |  ISLAS: ' + this.worldSize + ' x ' + this.worldSize, { fontFamily: 'monospace', fontSize: '10px', color: '#8ed1c5' }).setScrollFactor(0);
+        this.add.text(14, 303, 'FLECHAS / WASD / SHIFT  |  ONLINE', { fontFamily: 'monospace', fontSize: '10px', color: '#8ed1c5' }).setScrollFactor(0);
+        this.inventoryText = this.add.text(350, 303, 'OBJETOS: 0', { fontFamily: 'monospace', fontSize: '10px', color: '#f1c75b' }).setScrollFactor(0);
+        this.inventoryItems = {};
+        this.inventoryPanel = this.add.rectangle(240, 160, 250, 210, 0x152b34, 0.98).setStrokeStyle(4, 0xe8c96a).setScrollFactor(0).setDepth(20).setVisible(false);
+        this.inventoryPanelText = this.add.text(145, 70, this.inventorySummary(), { fontFamily: 'monospace', fontSize: '16px', color: '#f5f0d0', lineSpacing: 8 }).setScrollFactor(0).setDepth(21).setVisible(false);
     }
 
     update() {
@@ -258,6 +365,10 @@ class PuebloScene extends Phaser.Scene {
             ((down ? 1 : 0) - (up ? 1 : 0)) * speed
         );
         if (this.player.body.velocity.x && this.player.body.velocity.y) this.player.body.velocity.scale(0.7);
+        this.playerMarker.setPosition(this.player.x, this.player.y);
+        this.playerLabel.setPosition(this.player.x, this.player.y - 35);
+        const nearby = this.collectibles.some((item) => item.active && Phaser.Math.Distance.Between(this.player.x, this.player.y, item.x, item.y) < 42);
+        this.pickupHint.setPosition(this.player.x, this.player.y - 55).setAlpha(nearby ? 1 : 0);
         if (onlineSocket && onlineSocket.connected && this.time.now > this.lastNetworkUpdate + 50) {
             onlineSocket.emit('playerMovement', { x: this.player.x, y: this.player.y });
             this.lastNetworkUpdate = this.time.now;
