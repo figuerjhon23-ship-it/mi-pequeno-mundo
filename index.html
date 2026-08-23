@@ -117,6 +117,12 @@ class PuebloScene extends Phaser.Scene {
         this.load.image('ore_gold', 'assets/ore_gold.svg');
         this.load.image('ore_gem', 'assets/ore_gem.svg');
         this.load.image('pickaxe', 'assets/pickaxe.svg');
+        this.load.image('resource_log', 'assets/log.svg');
+        this.load.image('resource_berry', 'assets/berry.svg');
+        this.load.image('resource_potion', 'assets/potion.svg');
+        this.load.image('resource_gem', 'assets/gem_blue.svg');
+        this.load.image('resource_ore', 'assets/ore_rock.svg');
+        this.load.image('resource_chest', 'assets/chest_common.svg');
     }
 
     create() {
@@ -330,15 +336,41 @@ class PuebloScene extends Phaser.Scene {
         this.inventory = 0;
         this.collectibles = [];
         const objects = [
-            [720, 650, 'gema'], [580, 720, 'semilla'], [850, 760, 'moneda'],
-            [1150, 450, 'gema'], [1500, 700, 'semilla']
+            [720, 650, 'gema', 'resource_gem', 'GEMA'],
+            [580, 720, 'semilla', 'resource_potion', 'POCION'],
+            [850, 760, 'moneda', 'resource_chest', 'TESORO'],
+            [1150, 450, 'gema', 'resource_gem', 'GEMA'],
+            [1500, 700, 'semilla', 'resource_log', 'MADERA'],
+            [2800, 3200, 'madera', 'resource_log', 'MADERA'],
+            [2200, 4800, 'fruta', 'resource_berry', 'FRUTA'],
+            [5400, 5400, 'gema', 'resource_gem', 'GEMA'],
+            [6500, 4600, 'piedra', 'resource_ore', 'PIEDRA'],
+            [3500, 6600, 'pocion', 'resource_potion', 'POCION']
         ];
-        objects.forEach(([x, y, type]) => {
-            const item = this.add.image(x, y, 'item-assets', type).setScale(ITEM_SCALE).setDepth(4);
+        objects.forEach(([x, y, type, key, label]) => {
+            const item = this.add.image(x, y, key).setScale(0.9).setDepth(4);
             item.itemType = type;
-            item.itemLabel = this.add.text(x, y - 22, type.toUpperCase(), { fontFamily: 'monospace', fontSize: '9px', color: '#fff0a8' }).setOrigin(0.5);
+            item.itemLabel = this.add.text(x, y - 22, label, { fontFamily: 'monospace', fontSize: '9px', color: '#fff0a8' }).setOrigin(0.5);
             this.collectibles.push(item);
         });
+
+        const scatteredResources = [
+            { key: 'resource_log', type: 'madera', label: 'MADERA' },
+            { key: 'resource_berry', type: 'fruta', label: 'FRUTA' },
+            { key: 'resource_ore', type: 'piedra', label: 'PIEDRA' },
+            { key: 'resource_potion', type: 'pocion', label: 'POCION' },
+            { key: 'resource_gem', type: 'gema', label: 'GEMA' },
+            { key: 'resource_chest', type: 'tesoro', label: 'TESORO' }
+        ];
+        for (let index = 0; index < 28; index += 1) {
+            const choice = scatteredResources[index % scatteredResources.length];
+            const x = Phaser.Math.Between(600, this.worldSize - 600);
+            const y = Phaser.Math.Between(600, this.worldSize - 600);
+            const item = this.add.image(x, y, choice.key).setScale(0.7).setDepth(4);
+            item.itemType = choice.type;
+            item.itemLabel = this.add.text(x, y - 18, choice.label, { fontFamily: 'monospace', fontSize: '9px', color: '#fff0a8' }).setOrigin(0.5);
+            this.collectibles.push(item);
+        }
         this.pickupHint = this.add.text(650, 580, 'ESPACIO: RECOGER', { fontFamily: 'monospace', fontSize: '12px', color: '#10252c', backgroundColor: '#f1c75b', padding: { x: 7, y: 5 } }).setOrigin(0.5).setAlpha(0);
         this.input.keyboard.on('keydown-SPACE', () => this.pickupNearby());
         this.input.keyboard.on('keydown-Q', () => this.toggleInventory());
@@ -376,7 +408,7 @@ class PuebloScene extends Phaser.Scene {
     }
 
     inventorySummary() {
-        return `INVENTARIO\n\nGEMAS: ${this.inventoryItems.gema || 0}\nSEMILLAS: ${this.inventoryItems.semilla || 0}\nMONEDAS: ${this.inventoryItems.moneda || 0}\nCOPPER: ${this.inventoryItems.cobre || 0}\nHIERRO: ${this.inventoryItems.hierro || 0}\nORO: ${this.inventoryItems.oro || 0}\n\nPulsa Q para cerrar`;
+        return `INVENTARIO\n\nGEMAS: ${this.inventoryItems.gema || 0}\nMADERA: ${this.inventoryItems.madera || 0}\nFRUTA: ${this.inventoryItems.fruta || 0}\nPIEDRA: ${this.inventoryItems.piedra || 0}\nPOCION: ${this.inventoryItems.pocion || 0}\nTESORO: ${this.inventoryItems.tesoro || 0}\nSEMILLAS: ${this.inventoryItems.semilla || 0}\nMONEDAS: ${this.inventoryItems.moneda || 0}\nCOPPER: ${this.inventoryItems.cobre || 0}\nHIERRO: ${this.inventoryItems.hierro || 0}\nORO: ${this.inventoryItems.oro || 0}\n\nPulsa Q para cerrar`;
     }
 
     toggleInventory() {
