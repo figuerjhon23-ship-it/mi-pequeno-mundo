@@ -200,6 +200,7 @@ class PuebloScene extends Phaser.Scene {
         this.createCabin(5800, 5000, 'house', 'CABAÑA');
         this.createCabin(2700, 6200, 'market', 'AGRICULTOR');
         this.createCabin(6100, 6200, 'house', 'CASA');
+        this.createCityDistrict(1700, 1700);
         this.createCityDistrict();
 
         // Lugares importantes del mapa.
@@ -236,32 +237,34 @@ class PuebloScene extends Phaser.Scene {
         this.addWall(4000, 7500, 7000, 30); this.addWall(500, 4000, 30, 7000);
     }
 
-    createCityDistrict() {
+    createCityDistrict(centerX = 3150, centerY = 3350) {
         const buildings = [
-            [2550, 3000, 'cottage', 'CASA'],
-            [3150, 3000, 'house', 'CASA'],
-            [3750, 3000, 'cottage', 'CASA'],
-            [2550, 3600, 'market_stall', 'MERCADO'],
-            [3150, 3600, 'cottage', 'CASA'],
-            [3750, 3600, 'cottage', 'CASA'],
-            [3000, 4600, 'well', 'POZO'],
-            [4350, 3400, 'market_stall', 'PUESTO'],
-            [4700, 3000, 'house', 'CASA'],
-            [4700, 3600, 'cottage', 'CASA']
+            [-600, -350, 'cottage', 'CASA'],
+            [-150, -350, 'house', 'CASA'],
+            [300, -350, 'cottage', 'CASA'],
+            [-600, 250, 'market_stall', 'MERCADO'],
+            [-150, 250, 'cottage', 'CASA'],
+            [300, 250, 'cottage', 'CASA'],
+            [-150, 850, 'well', 'POZO'],
+            [700, 0, 'market_stall', 'PUESTO'],
+            [1050, -350, 'house', 'CASA'],
+            [1050, 250, 'cottage', 'CASA']
         ];
 
-        buildings.forEach(([x, y, key, label]) => {
+        buildings.forEach(([offsetX, offsetY, key, label]) => {
+            const x = centerX + offsetX;
+            const y = centerY + offsetY;
             const sprite = this.add.image(x, y, key).setDepth(3);
             sprite.setScale(key === 'market_stall' ? 1.15 : 1.05);
             this.add.text(x, y - 52, label, { fontFamily: 'monospace', fontSize: '10px', color: '#fff0a8' }).setOrigin(0.5);
         });
 
-        this.add.rectangle(3150, 3350, 2300, 180, 0xd7c484).setStrokeStyle(6, 0x85643f);
-        this.add.rectangle(3150, 3350, 150, 150, 0x8a764d).setStrokeStyle(4, 0x5b3b2a);
-        this.add.text(3150, 3345, 'CENTRO', { fontFamily: 'monospace', fontSize: '11px', color: '#fff0a8' }).setOrigin(0.5);
-        this.add.image(3000, 3350, 'market_stall').setScale(1.05).setDepth(4);
-        this.add.image(3300, 3350, 'well').setScale(0.85).setDepth(4);
-        this.add.text(3150, 3680, 'CIUDAD DEL VALLE', { fontFamily: 'monospace', fontSize: '16px', color: '#fff0a8' }).setOrigin(0.5);
+        this.add.rectangle(centerX, centerY, 2300, 180, 0xd7c484).setStrokeStyle(6, 0x85643f);
+        this.add.rectangle(centerX, centerY, 150, 150, 0x8a764d).setStrokeStyle(4, 0x5b3b2a);
+        this.add.text(centerX, centerY, 'CENTRO', { fontFamily: 'monospace', fontSize: '11px', color: '#fff0a8' }).setOrigin(0.5);
+        this.add.image(centerX - 150, centerY, 'market_stall').setScale(1.05).setDepth(4);
+        this.add.image(centerX + 150, centerY, 'well').setScale(0.85).setDepth(4);
+        this.add.text(centerX, centerY + 330, 'CIUDAD DEL VALLE', { fontFamily: 'monospace', fontSize: '16px', color: '#fff0a8' }).setOrigin(0.5);
     }
 
     spawnSceneryProps() {
