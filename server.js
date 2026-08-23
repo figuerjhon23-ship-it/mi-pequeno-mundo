@@ -35,8 +35,8 @@ io.on('connection', (socket) => {
     socket.on('playerMovement', (movement = {}) => {
         const player = players.get(socket.id);
         if (!player) return;
-        if (Number.isFinite(movement.x)) player.x = Math.max(0, Math.min(5000, movement.x));
-        if (Number.isFinite(movement.y)) player.y = Math.max(0, Math.min(5000, movement.y));
+        if (Number.isFinite(movement.x)) player.x = Math.max(0, Math.min(8000, movement.x));
+        if (Number.isFinite(movement.y)) player.y = Math.max(0, Math.min(8000, movement.y));
         socket.broadcast.emit('playerMoved', player);
     });
 

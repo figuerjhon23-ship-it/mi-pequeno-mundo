@@ -62,6 +62,12 @@ const authMessage = document.getElementById('auth-message');
 let registering = false;
 let onlineSocket;
 
+// Ajustes faciles de modificar: 500 bloques de 16 px forman una isla de 8000 px.
+const TILE_SIZE = 16;
+const WORLD_TILES = 500;
+const WORLD_SIZE = TILE_SIZE * WORLD_TILES;
+const ITEM_SCALE = 0.22;
+
 function readUsers() {
     try { return JSON.parse(localStorage.getItem('zafiro-users') || '{}'); }
     catch (error) { return {}; }
@@ -104,46 +110,115 @@ class PuebloScene extends Phaser.Scene {
         this.load.image('farm', 'assets/farm.svg');
         this.load.image('crops', 'assets/crops.svg');
         this.load.image('items', 'assets/items.svg');
+        this.load.image('buildings', 'assets/buildings.svg');
+        this.load.image('animals', 'assets/animals.svg');
+        this.load.image('ore_copper', 'assets/ore_copper.svg');
+        this.load.image('ore_iron', 'assets/ore_iron.svg');
+        this.load.image('ore_gold', 'assets/ore_gold.svg');
+        this.load.image('ore_gem', 'assets/ore_gem.svg');
+        this.load.image('pickaxe', 'assets/pickaxe.svg');
     }
 
     create() {
         // Un mundo amplio, pero razonable para que funcione con fluidez en navegador.
         // Mundo compacto para que los jugadores se encuentren rápidamente.
-        this.worldSize = 2000;
+        this.worldSize = WORLD_SIZE;
         this.physics.world.setBounds(0, 0, this.worldSize, this.worldSize);
         this.prepareItemSprites();
+        this.prepareBuildingSprites();
+        this.prepareAnimalSprites();
         this.drawWorld();
         this.createPlayer();
+        this.createAnimals();
         this.createCollectibles();
+        this.createOres();
         this.createHud();
         this.connectOnline();
         this.cameras.main.setBounds(0, 0, this.worldSize, this.worldSize);
         this.cameras.main.startFollow(this.player, true, 0.16, 0.16);
         this.cursors = this.input.keyboard.createCursorKeys();
-        this.keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT,Q,SPACE');
+        this.keys = this.input.keyboard.addKeys('W,S,D,SHIFT,Q,SPACE');
+        this.input.keyboard.on('keydown-A', () => this.enterBuilding());
     }
 
-    // Genera islas, caminos, rios, bosque y volcanes sin cargar imagenes externas.
+    // Construye una sola isla grande con zonas de agua cruzables por puentes.
     drawWorld() {
         this.add.rectangle(this.worldSize / 2, this.worldSize / 2, this.worldSize, this.worldSize, 0x1e3d59);
         this.walls = this.physics.add.staticGroup();
-        for (let x = 500; x < this.worldSize; x += 1250) {
-            for (let y = 500; y < this.worldSize; y += 1250) {
-                this.add.rectangle(x, y, 900, 900, 0x4f9d64);
-                this.add.rectangle(x, y + 330, 900, 80, 0xc19a62);
-                this.add.rectangle(x - 330, y, 80, 900, 0xc19a62);
-                this.add.rectangle(x + 120, y - 170, 180, 140, 0x176b62);
-                this.addWall(x + 120, y - 170, 180, 140);
-                const river = this.add.rectangle(x + 300, y, 110, 900, 0x238cb0).setStrokeStyle(3, 0x8dd8d3);
-                this.walls.add(river);
-                this.add.rectangle(x + 280, y + 240, 150, 40, 0x8b3f2f);
-                this.createCabin(x - 180, y - 220);
-                this.decorateIsland(x, y);
-            }
-        }
-        this.add.text(2500, 110, 'MI PEQUEÑO MUNDO', { fontFamily: 'monospace', fontSize: '30px', color: '#fff0a8' }).setOrigin(0.5);
-        this.addWall(2500, 10, this.worldSize, 20); this.addWall(2500, 4990, this.worldSize, 20);
-        this.addWall(10, 2500, 20, this.worldSize); this.addWall(4990, 2500, 20, this.worldSize);
+        this.landmarks = [];
+
+        // Isla principal con tierra, playa, caminos y zonas rurales.
+        this.add.rectangle(4000, 4000, 7000, 7000, 0x4f9d64).setStrokeStyle(12, 0x9bd17b);
+        this.add.rectangle(4000, 720, 7000, 260, 0xe0c27b);
+        this.add.rectangle(4000, 7280, 7000, 260, 0xe0c27b);
+        this.add.rectangle(720, 4000, 1200, 250, 0xe0c27b);
+        this.add.rectangle(7320, 4000, 1200, 250, 0xe0c27b);
+        this.add.rectangle(4000, 720, 250, 1200, 0xe0c27b);
+        this.add.rectangle(4000, 7280, 250, 1200, 0xe0c27b);
+
+        // Rio central con puente.
+        this.addWater(4000, 1900, 180, 2400);
+        this.addWater(4000, 6100, 180, 2200);
+        this.add.rectangle(4000, 4000, 260, 120, 0x805533).setStrokeStyle(5, 0xd7a65a);
+        this.add.text(4000, 4000, 'PUENTE', { fontFamily: 'monospace', fontSize: '12px', color: '#fff0a8' }).setOrigin(0.5);
+
+        // Lagos, playa y fuente.
+        this.addWater(1900, 1700, 620, 330);
+        this.addWater(6000, 5800, 520, 280);
+        this.add.circle(3000, 3800, 170, 0x238cb0).setStrokeStyle(5, 0x8dd8d3);
+        this.add.circle(3000, 3800, 34, 0xd9c477).setStrokeStyle(4, 0x8b6b3f);
+        this.add.text(3000, 3800, 'FUENTE', { fontFamily: 'monospace', fontSize: '11px', color: '#fff0a8' }).setOrigin(0.5);
+        this.add.rectangle(1200, 3000, 900, 240, 0xe0c27b);
+        this.add.rectangle(6800, 5000, 900, 240, 0xe0c27b);
+        this.add.rectangle(3000, 4000, 900, 700, 0xc19a62);
+        this.add.rectangle(3000, 4000, 5400, 110, 0xc19a62);
+        this.add.rectangle(3000, 4000, 110, 5400, 0xc19a62);
+
+        // Edificios importantes.
+        this.createCabin(2250, 3300, 'house', 'HOSPITAL');
+        this.createCabin(3150, 5000, 'market', 'GYM');
+        this.createCabin(5500, 3300, 'barn', 'REFUGIO');
+        this.createCabin(5800, 5000, 'house', 'CABAÑA');
+        this.createCabin(2700, 6200, 'market', 'AGRICULTOR');
+        this.createCabin(6100, 6200, 'house', 'CASA');
+
+        // Lugares importantes del mapa.
+        this.addImportantLandmark(1200, 3400, 'HOSPITAL', 0x6bb7ff);
+        this.addImportantLandmark(3400, 5000, 'GYM', 0xffd166);
+        this.addImportantLandmark(5600, 3300, 'REFUGIO', 0x8ee6b5);
+        this.addImportantLandmark(2700, 6200, 'CAMPOS', 0xe3c86d);
+        this.addImportantLandmark(6500, 5200, 'TRABAJO', 0xe3c86d);
+        this.addImportantLandmark(1900, 6400, 'PLAYA', 0xffd68a);
+        this.addImportantLandmark(6500, 7600, 'MUELLE', 0xd9b57a);
+        this.addImportantLandmark(6500, 1800, 'CUEVA', 0x7c8ca5);
+
+        // Señales de huertas, granjas y cuevas.
+        this.decorateIsland(2300, 5200);
+        this.decorateIsland(5600, 4300);
+        this.decorateIsland(6400, 6200);
+        [[1400, 5900], [6700, 1800], [6900, 6500]].forEach(([x, y]) => {
+            this.add.circle(x, y, 90, 0x37404a).setStrokeStyle(10, 0x69727a);
+            this.add.ellipse(x, y + 25, 90, 120, 0x121b25);
+            this.add.text(x, y + 125, 'CUEVA', { fontFamily: 'monospace', fontSize: '11px', color: '#fff0a8' }).setOrigin(0.5);
+        });
+        [[1500, 700], [6500, 7300]].forEach(([x, y]) => {
+            this.add.rectangle(x, y, 90, 420, 0x805533).setStrokeStyle(4, 0xd7a65a);
+            for (let offset = -160; offset <= 160; offset += 80) this.add.rectangle(x, y + offset, 105, 14, 0xd7a65a);
+            this.add.text(x, y + 235, 'MUELLE', { fontFamily: 'monospace', fontSize: '11px', color: '#fff0a8' }).setOrigin(0.5);
+        });
+
+        // Playa con arena y borde de costa.
+        this.add.rectangle(1000, 7600, 1400, 900, 0xf0d9a8).setStrokeStyle(4, 0x9a7d5d);
+        this.add.rectangle(7000, 7600, 1400, 900, 0xf0d9a8).setStrokeStyle(4, 0x9a7d5d);
+
+        this.add.text(4000, 420, 'MI PEQUEÑO MUNDO', { fontFamily: 'monospace', fontSize: '30px', color: '#fff0a8' }).setOrigin(0.5);
+        this.addWall(500, 500, 7000, 30); this.addWall(7500, 4000, 30, 7000);
+        this.addWall(4000, 7500, 7000, 30); this.addWall(500, 4000, 30, 7000);
+    }
+
+    addWater(x, y, width, height) {
+        this.add.rectangle(x, y, width, height, 0x238cb0).setStrokeStyle(5, 0x8dd8d3);
+        this.addWall(x, y, width, height);
     }
 
     addWall(x, y, width, height) {
@@ -176,14 +251,78 @@ class PuebloScene extends Phaser.Scene {
         texture.add('moneda', 0, 128, 0, 64, 64);
     }
 
-    createCabin(x, y) {
-        this.add.rectangle(x, y, 180, 110, 0xe9e2c0).setStrokeStyle(3, 0x473b46);
-        this.add.rectangle(x, y - 58, 195, 24, 0xd95858).setStrokeStyle(2, 0x473b46);
-        this.add.text(x, y - 58, 'CENTRO', { fontFamily: 'monospace', fontSize: '13px', color: '#fff4cf' }).setOrigin(0.5);
+    prepareBuildingSprites() {
+        const source = this.textures.get('buildings').getSourceImage();
+        const texture = this.textures.createCanvas('building-assets', source.width, source.height);
+        texture.context.drawImage(source, 0, 0);
+        texture.refresh();
+        texture.add('house', 0, 0, 0, 128, 96);
+        texture.add('market', 0, 128, 0, 128, 96);
+        texture.add('barn', 0, 256, 0, 128, 96);
+    }
+
+    prepareAnimalSprites() {
+        const source = this.textures.get('animals').getSourceImage();
+        const texture = this.textures.createCanvas('animal-assets', source.width, source.height);
+        texture.context.drawImage(source, 0, 0);
+        texture.refresh();
+        texture.add('cow', 0, 0, 0, 64, 64);
+        texture.add('sheep', 0, 64, 0, 64, 64);
+    }
+
+    addImportantLandmark(x, y, label, color) {
+        const marker = this.add.rectangle(x, y, 42, 42, color, 0.9).setStrokeStyle(3, 0xffffff);
+        this.add.text(x, y + 34, label, { fontFamily: 'monospace', fontSize: '8px', color: '#fff0a8' }).setOrigin(0.5);
+        this.landmarks.push({ x, y, marker, label });
+    }
+
+    createCabin(x, y, type = 'house', label = 'CASA') {
+        const baseColor = label === 'HOSPITAL' ? 0xc9ebff : (label === 'GYM' ? 0xffe7a3 : (label === 'REFUGIO' ? 0xc8f3d7 : 0xe9e2c0));
+        const roofColor = label === 'HOSPITAL' ? 0x4e86c9 : (label === 'GYM' ? 0xda8d2d : (label === 'REFUGIO' ? 0x5ea35a : 0xd95858));
+
+        this.add.rectangle(x, y, 180, 110, baseColor).setStrokeStyle(3, 0x473b46);
+        this.add.rectangle(x, y - 58, 195, 24, roofColor).setStrokeStyle(2, 0x473b46);
+        this.add.text(x, y - 58, label, { fontFamily: 'monospace', fontSize: '13px', color: '#fff4cf' }).setOrigin(0.5);
         this.add.rectangle(x, y + 30, 25, 50, 0x6d4b51);
-        this.add.text(x, y + 30, 'P', { fontFamily: 'monospace', fontSize: '18px', color: '#fff4cf' }).setOrigin(0.5);
-        this.add.image(x, y, 'farm').setDepth(2);
+        this.add.text(x, y + 30, label === 'HOSPITAL' ? 'H' : (label === 'GYM' ? 'G' : (label === 'REFUGIO' ? 'R' : 'P')), { fontFamily: 'monospace', fontSize: '18px', color: '#fff4cf' }).setOrigin(0.5);
+        const building = this.add.image(x, y, 'building-assets', type).setDepth(2).setScale(1.25);
+        this.buildings = this.buildings || [];
+        const name = label === 'HOSPITAL' ? 'Hospital' : (label === 'GYM' ? 'Gimnasio' : (label === 'REFUGIO' ? 'Refugio' : (label === 'AGRICULTOR' ? 'Agricultor' : (label === 'MERCADO' ? 'Mercado' : 'Casa'))));
+        this.buildings.push({ x, y, name });
+        this.doors = this.doors || [];
+        this.doors.push({ x, y: y + 68, name });
         this.addWall(x - 95, y, 12, 110); this.addWall(x + 95, y, 12, 110); this.addWall(x, y - 65, 200, 12);
+    }
+
+    createAnimals() {
+        this.animals = [];
+        for (let index = 0; index < 18; index += 1) {
+            const x = 500 + ((index * 173) % 6800);
+            const y = 500 + ((index * 251) % 6800);
+            const type = index % 2 === 0 ? 'cow' : 'sheep';
+            const animal = this.add.image(x, y, 'animal-assets', type).setScale(0.65).setDepth(3);
+            this.animals.push(animal);
+            this.tweens.add({ targets: animal, x: x + Phaser.Math.Between(-35, 35), y: y + Phaser.Math.Between(-35, 35), duration: 2600, yoyo: true, repeat: -1, delay: index * 110 });
+        }
+    }
+
+    createOres() {
+        this.ores = [];
+        const oreDefs = [
+            { x: 1200, y: 2200, key: 'ore_copper', label: 'Cobre' },
+            { x: 1600, y: 2600, key: 'ore_iron', label: 'Hierro' },
+            { x: 2300, y: 1900, key: 'ore_gold', label: 'Oro' },
+            { x: 6200, y: 2200, key: 'ore_gem', label: 'Gema' },
+            { x: 6800, y: 2800, key: 'ore_iron', label: 'Hierro' },
+            { x: 7200, y: 5200, key: 'ore_gold', label: 'Oro' }
+        ];
+        oreDefs.forEach((oreDef) => {
+            const ore = this.add.image(oreDef.x, oreDef.y, oreDef.key).setScale(0.8).setDepth(3);
+            ore.oreType = oreDef.label;
+            ore.itemLabel = this.add.text(oreDef.x, oreDef.y - 26, oreDef.label, { fontFamily: 'monospace', fontSize: '9px', color: '#fff0a8' }).setOrigin(0.5);
+            this.ores.push(ore);
+        });
+        this.pickaxe = this.add.image(0, 0, 'pickaxe').setScale(0.8).setVisible(false).setDepth(10);
     }
 
     // Objetos simples del mundo que el jugador puede recoger al acercarse.
@@ -195,7 +334,7 @@ class PuebloScene extends Phaser.Scene {
             [1150, 450, 'gema'], [1500, 700, 'semilla']
         ];
         objects.forEach(([x, y, type]) => {
-            const item = this.add.image(x, y, 'item-assets', type).setScale(0.55).setDepth(4);
+            const item = this.add.image(x, y, 'item-assets', type).setScale(ITEM_SCALE).setDepth(4);
             item.itemType = type;
             item.itemLabel = this.add.text(x, y - 22, type.toUpperCase(), { fontFamily: 'monospace', fontSize: '9px', color: '#fff0a8' }).setOrigin(0.5);
             this.collectibles.push(item);
@@ -203,21 +342,41 @@ class PuebloScene extends Phaser.Scene {
         this.pickupHint = this.add.text(650, 580, 'ESPACIO: RECOGER', { fontFamily: 'monospace', fontSize: '12px', color: '#10252c', backgroundColor: '#f1c75b', padding: { x: 7, y: 5 } }).setOrigin(0.5).setAlpha(0);
         this.input.keyboard.on('keydown-SPACE', () => this.pickupNearby());
         this.input.keyboard.on('keydown-Q', () => this.toggleInventory());
+        this.input.keyboard.on('keydown-E', () => this.pickupNearby());
     }
 
     pickupNearby() {
         const item = this.collectibles.find((candidate) => candidate.active && Phaser.Math.Distance.Between(this.player.x, this.player.y, candidate.x, candidate.y) < 42);
-        if (!item) return;
-        item.itemLabel.destroy();
-        item.destroy();
+        if (item) {
+            item.itemLabel.destroy();
+            item.destroy();
+            this.inventory += 1;
+            this.inventoryItems[item.itemType] = (this.inventoryItems[item.itemType] || 0) + 1;
+            this.inventoryText.setText(`OBJETOS: ${this.inventory}`);
+            this.inventoryPanelText.setText(this.inventorySummary());
+            return;
+        }
+
+        const ore = this.ores.find((candidate) => candidate.active && Phaser.Math.Distance.Between(this.player.x, this.player.y, candidate.x, candidate.y) < 60);
+        if (!ore) return;
+        ore.itemLabel.destroy();
+        ore.destroy();
+        const oreKey = ore.oreType.toLowerCase().replace(/\s+/g, '_');
+        this.inventoryItems[oreKey] = (this.inventoryItems[oreKey] || 0) + 1;
         this.inventory += 1;
-        this.inventoryItems[item.itemType] = (this.inventoryItems[item.itemType] || 0) + 1;
         this.inventoryText.setText(`OBJETOS: ${this.inventory}`);
         this.inventoryPanelText.setText(this.inventorySummary());
     }
 
+    enterBuilding() {
+        const door = this.doors.find((candidate) => Phaser.Math.Distance.Between(this.player.x, this.player.y, candidate.x, candidate.y) < 70);
+        if (!door) return;
+        if (onlineSocket) onlineSocket.disconnect();
+        this.scene.start('InteriorScene', { buildingName: door.name, returnX: this.player.x, returnY: this.player.y + 35 });
+    }
+
     inventorySummary() {
-        return `INVENTARIO\n\nGEMAS: ${this.inventoryItems.gema || 0}\nSEMILLAS: ${this.inventoryItems.semilla || 0}\nMONEDAS: ${this.inventoryItems.moneda || 0}\n\nPulsa Q para cerrar`;
+        return `INVENTARIO\n\nGEMAS: ${this.inventoryItems.gema || 0}\nSEMILLAS: ${this.inventoryItems.semilla || 0}\nMONEDAS: ${this.inventoryItems.moneda || 0}\nCOPPER: ${this.inventoryItems.cobre || 0}\nHIERRO: ${this.inventoryItems.hierro || 0}\nORO: ${this.inventoryItems.oro || 0}\n\nPulsa Q para cerrar`;
     }
 
     toggleInventory() {
@@ -293,7 +452,6 @@ class PuebloScene extends Phaser.Scene {
         this.player.body.setSize(18, 25).setOffset(7, 20);
         this.player.body.setMaxVelocity(320, 320);
         this.physics.add.collider(this.player, this.walls);
-        this.physics.add.collider(this.player, this.lake);
         this.playerLabel = this.add.text(650, 615, window.currentUser, { fontFamily: 'monospace', fontSize: '12px', color: '#fff0a8', backgroundColor: '#10252c' }).setOrigin(0.5);
     }
 
@@ -352,10 +510,51 @@ class PuebloScene extends Phaser.Scene {
         this.inventoryItems = {};
         this.inventoryPanel = this.add.rectangle(240, 160, 250, 210, 0x152b34, 0.98).setStrokeStyle(4, 0xe8c96a).setScrollFactor(0).setDepth(20).setVisible(false);
         this.inventoryPanelText = this.add.text(145, 70, this.inventorySummary(), { fontFamily: 'monospace', fontSize: '16px', color: '#f5f0d0', lineSpacing: 8 }).setScrollFactor(0).setDepth(21).setVisible(false);
+
+        this.minimapBg = this.add.rectangle(430, 55, 130, 130, 0x0c1c1f, 0.9).setStrokeStyle(3, 0xe8c96a).setScrollFactor(0).setDepth(25);
+        this.minimap = this.add.graphics().setScrollFactor(0).setDepth(26);
+        this.minimapWidth = 120;
+        this.minimapHeight = 120;
+        this.minimapScale = this.minimapWidth / this.worldSize;
+        this.updateMinimap();
+    }
+
+    updateMinimap() {
+        if (!this.minimap) return;
+        this.minimap.clear();
+
+        // Mundo base
+        this.minimap.fillStyle(0x1e3d59, 1);
+        this.minimap.fillRect(430 - this.minimapWidth / 2, 55 - this.minimapHeight / 2, this.minimapWidth, this.minimapHeight);
+
+        // Isla principal
+        this.minimap.fillStyle(0x4f9d64, 1);
+        const islandX = 430 - this.minimapWidth / 2 + (4000 * this.minimapScale);
+        const islandY = 55 - this.minimapHeight / 2 + (4000 * this.minimapScale);
+        const islandSize = 7000 * this.minimapScale;
+        this.minimap.fillRect(islandX - islandSize / 2, islandY - islandSize / 2, islandSize, islandSize);
+
+        // Sitios importantes
+        this.landmarks.forEach((landmark) => {
+            const px = 430 - this.minimapWidth / 2 + (landmark.x * this.minimapScale);
+            const py = 55 - this.minimapHeight / 2 + (landmark.y * this.minimapScale);
+            this.minimap.fillStyle(landmark.marker.fillColor || 0x4bb7ff, 1);
+            this.minimap.fillRect(px - 2, py - 2, 4, 4);
+        });
+
+        // Jugador.
+        const playerX = 430 - this.minimapWidth / 2 + (this.player.x * this.minimapScale);
+        const playerY = 55 - this.minimapHeight / 2 + (this.player.y * this.minimapScale);
+        this.minimap.fillStyle(0xffd166, 1);
+        this.minimap.fillRect(playerX - 3, playerY - 3, 6, 6);
+
+        // Frontera.
+        this.minimap.lineStyle(2, 0xe8c96a, 1);
+        this.minimap.strokeRect(430 - this.minimapWidth / 2, 55 - this.minimapHeight / 2, this.minimapWidth, this.minimapHeight);
     }
 
     update() {
-        const left = this.cursors.left.isDown || this.keys.A.isDown;
+        const left = this.cursors.left.isDown;
         const right = this.cursors.right.isDown || this.keys.D.isDown;
         const up = this.cursors.up.isDown || this.keys.W.isDown;
         const down = this.cursors.down.isDown || this.keys.S.isDown;
@@ -367,12 +566,43 @@ class PuebloScene extends Phaser.Scene {
         if (this.player.body.velocity.x && this.player.body.velocity.y) this.player.body.velocity.scale(0.7);
         this.playerMarker.setPosition(this.player.x, this.player.y);
         this.playerLabel.setPosition(this.player.x, this.player.y - 35);
-        const nearby = this.collectibles.some((item) => item.active && Phaser.Math.Distance.Between(this.player.x, this.player.y, item.x, item.y) < 42);
-        this.pickupHint.setPosition(this.player.x, this.player.y - 55).setAlpha(nearby ? 1 : 0);
+        const nearbyItem = this.collectibles.some((item) => item.active && Phaser.Math.Distance.Between(this.player.x, this.player.y, item.x, item.y) < 42);
+        const nearbyOre = this.ores.some((ore) => ore.active && Phaser.Math.Distance.Between(this.player.x, this.player.y, ore.x, ore.y) < 60);
+        this.pickupHint.setPosition(this.player.x, this.player.y - 55).setAlpha(nearbyItem || nearbyOre ? 1 : 0);
+        this.updateMinimap();
         if (onlineSocket && onlineSocket.connected && this.time.now > this.lastNetworkUpdate + 50) {
             onlineSocket.emit('playerMovement', { x: this.player.x, y: this.player.y });
             this.lastNetworkUpdate = this.time.now;
         }
+    }
+}
+
+// Interior comun para casa, mercado y granero. Se sale acercandose a la puerta y pulsando A.
+class InteriorScene extends Phaser.Scene {
+    constructor() { super('InteriorScene'); }
+
+    create(data) {
+        this.returnData = data;
+        this.add.rectangle(400, 300, 800, 600, 0x4b3029);
+        this.add.rectangle(400, 315, 650, 430, 0xd8c58f).setStrokeStyle(8, 0x7b4b36);
+        for (let x = 80; x < 720; x += 40) for (let y = 105; y < 525; y += 40) this.add.rectangle(x, y, 36, 36, (x + y) % 80 === 0 ? 0xf0dfa8 : 0xcdb87f);
+        this.add.text(400, 75, data.buildingName.toUpperCase(), { fontFamily: 'monospace', fontSize: '22px', color: '#fff0a8' }).setOrigin(0.5);
+        this.add.rectangle(400, 530, 74, 22, 0xb74a42);
+        this.add.text(400, 505, 'A: SALIR', { fontFamily: 'monospace', fontSize: '12px', color: '#ffffff' }).setOrigin(0.5);
+        this.player = this.physics.add.sprite(400, 450, 'hero').setScale(0.62);
+        this.player.setCollideWorldBounds(true);
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keys = this.input.keyboard.addKeys('W,S,D');
+        this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    }
+
+    update() {
+        this.player.setVelocity(0);
+        if (this.cursors.left.isDown) this.player.setVelocityX(-220);
+        else if (this.cursors.right.isDown || this.keys.D.isDown) this.player.setVelocityX(220);
+        if (this.cursors.up.isDown || this.keys.W.isDown) this.player.setVelocityY(-220);
+        else if (this.cursors.down.isDown || this.keys.S.isDown) this.player.setVelocityY(220);
+        if (Phaser.Input.Keyboard.JustDown(this.keyA) && this.player.y > 490) this.scene.start('PuebloScene', { spawnX: this.returnData.returnX, spawnY: this.returnData.returnY });
     }
 }
 
@@ -387,7 +617,7 @@ function startGame(username) {
         pixelArt: true,
         backgroundColor: '#5aa66a',
         physics: { default: 'arcade', arcade: { debug: false } },
-        scene: [PuebloScene]
+        scene: [PuebloScene, InteriorScene]
     });
 }
 </script>
