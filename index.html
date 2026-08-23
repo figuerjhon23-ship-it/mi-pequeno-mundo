@@ -156,7 +156,8 @@ class PuebloScene extends Phaser.Scene {
         context.putImageData(pixels, 0, 0);
         canvasTexture.refresh();
         // Primer personaje de la columna CHARACTER del collage.
-        canvasTexture.add('player', 0, 25, 32, 50, 55);
+        // El primer personaje ocupa aproximadamente x=24..86, y=48..112.
+        canvasTexture.add('player', 0, 24, 48, 64, 64);
     }
 
     createCabin(x, y) {
@@ -204,6 +205,9 @@ class PuebloScene extends Phaser.Scene {
     // Socket.io comparte la posicion con todos los jugadores conectados.
     connectOnline() {
         this.remotePlayers = {};
+        // GitHub Pages no ejecuta el servidor Socket.io; en ese caso el juego
+        // sigue siendo jugable en modo local sin jugadores remotos.
+        if (typeof io !== 'function') return;
         onlineSocket = io();
         onlineSocket.on('currentPlayers', (players) => {
             Object.values(players).forEach((player) => {
@@ -221,7 +225,7 @@ class PuebloScene extends Phaser.Scene {
     }
 
     addRemotePlayer(player) {
-        if (player.id === onlineSocket.id) return;
+        if (!onlineSocket || player.id === onlineSocket.id) return;
         if (!this.remotePlayers[player.id]) {
             const remote = this.add.sprite(player.x, player.y, 'pixel-assets', 'player').setScale(0.7).setTint(0x63d6cb);
             remote.nameLabel = this.add.text(player.x, player.y - 35, player.name || 'Explorador', { fontFamily: 'monospace', fontSize: '11px', color: '#ffffff', backgroundColor: '#10252c' }).setOrigin(0.5);

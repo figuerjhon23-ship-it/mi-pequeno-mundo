@@ -1,0 +1,14 @@
+{
+  "name": "mi-pequeno-mundo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RPG top-down online con Phaser y Socket.io",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}
