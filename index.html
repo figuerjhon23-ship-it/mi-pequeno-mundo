@@ -123,6 +123,18 @@ class PuebloScene extends Phaser.Scene {
         this.load.image('resource_gem', 'assets/gem_blue.svg');
         this.load.image('resource_ore', 'assets/ore_rock.svg');
         this.load.image('resource_chest', 'assets/chest_common.svg');
+        this.load.image('apple_tree_fruit', 'assets/apple_tree_fruit.svg');
+        this.load.image('pine_tree', 'assets/pine_tree.svg');
+        this.load.image('fence', 'assets/fence.svg');
+        this.load.image('flower', 'assets/flower.svg');
+        this.load.image('rock', 'assets/rock.svg');
+        this.load.image('well', 'assets/well.svg');
+        this.load.image('cottage', 'assets/cottage.svg');
+        this.load.image('market_stall', 'assets/market_stall.svg');
+        this.load.image('bridge_wood', 'assets/bridge_wood.svg');
+        this.load.image('dock', 'assets/dock.svg');
+        this.load.image('wheat', 'assets/wheat.svg');
+        this.load.image('mushroom', 'assets/mushroom.svg');
     }
 
     create() {
@@ -134,6 +146,7 @@ class PuebloScene extends Phaser.Scene {
         this.prepareBuildingSprites();
         this.prepareAnimalSprites();
         this.drawWorld();
+        this.spawnSceneryProps();
         this.createPlayer();
         this.createAnimals();
         this.createCollectibles();
@@ -220,6 +233,51 @@ class PuebloScene extends Phaser.Scene {
         this.add.text(4000, 420, 'MI PEQUEÑO MUNDO', { fontFamily: 'monospace', fontSize: '30px', color: '#fff0a8' }).setOrigin(0.5);
         this.addWall(500, 500, 7000, 30); this.addWall(7500, 4000, 30, 7000);
         this.addWall(4000, 7500, 7000, 30); this.addWall(500, 4000, 30, 7000);
+    }
+
+    spawnSceneryProps() {
+        const propGroups = [
+            { key: 'apple_tree_fruit', x: 1600, y: 1200, scale: 1.2 },
+            { key: 'apple_tree_fruit', x: 2100, y: 1400, scale: 1.1 },
+            { key: 'apple_tree_fruit', x: 2400, y: 1200, scale: 1.2 },
+            { key: 'pine_tree', x: 2300, y: 5600, scale: 1.15 },
+            { key: 'pine_tree', x: 2800, y: 6100, scale: 1.15 },
+            { key: 'pine_tree', x: 6300, y: 4400, scale: 1.2 },
+            { key: 'pine_tree', x: 5700, y: 6700, scale: 1.2 },
+            { key: 'fence', x: 2400, y: 5200, scale: 0.9 },
+            { key: 'fence', x: 6500, y: 6800, scale: 0.9 },
+            { key: 'flower', x: 1200, y: 2000, scale: 0.75 },
+            { key: 'flower', x: 3900, y: 5200, scale: 0.75 },
+            { key: 'flower', x: 6100, y: 3300, scale: 0.75 },
+            { key: 'rock', x: 830, y: 3300, scale: 0.9 },
+            { key: 'rock', x: 5400, y: 2500, scale: 0.9 },
+            { key: 'rock', x: 6800, y: 6400, scale: 0.9 },
+            { key: 'well', x: 3500, y: 4400, scale: 1.1 },
+            { key: 'well', x: 5400, y: 5600, scale: 1.1 },
+            { key: 'cottage', x: 2600, y: 5100, scale: 1.1 },
+            { key: 'cottage', x: 7000, y: 5100, scale: 1.1 },
+            { key: 'market_stall', x: 3300, y: 6400, scale: 1.1 },
+            { key: 'dock', x: 6900, y: 7400, scale: 1.3 },
+            { key: 'bridge_wood', x: 4000, y: 4000, scale: 1.1 },
+            { key: 'wheat', x: 3800, y: 6000, scale: 0.8 },
+            { key: 'wheat', x: 6400, y: 6200, scale: 0.8 },
+            { key: 'mushroom', x: 1700, y: 6400, scale: 0.7 },
+            { key: 'mushroom', x: 6800, y: 1850, scale: 0.7 }
+        ];
+
+        propGroups.forEach(({ key, x, y, scale }) => {
+            this.add.image(x, y, key).setScale(scale).setDepth(3);
+        });
+
+        const randomProps = ['apple_tree_fruit', 'pine_tree', 'flower', 'rock', 'mushroom', 'wheat'];
+        for (let index = 0; index < 46; index += 1) {
+            const key = randomProps[index % randomProps.length];
+            const x = Phaser.Math.Between(700, this.worldSize - 700);
+            const y = Phaser.Math.Between(700, this.worldSize - 700);
+            const sprite = this.add.image(x, y, key).setScale(Phaser.Math.FloatBetween(0.45, 1.2)).setDepth(2);
+            if (key === 'flower') sprite.setScale(0.7);
+            if (key === 'rock') sprite.setScale(0.8);
+        }
     }
 
     addWater(x, y, width, height) {
