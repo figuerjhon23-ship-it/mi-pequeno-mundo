@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Pequeño Mundo</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    <style>
+        :root { font-family: monospace; color: #f5f0d0; background: #101820; }
+        html, body { margin: 0; min-height: 100%; background: #101820; }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        .login-panel {
+            width: min(360px, calc(100vw - 40px));
+            padding: 28px;
+            background: #1d3540;
+            border: 4px solid #e8c96a;
+            box-shadow: 8px 8px 0 #081016;
+            text-align: center;
+        }
+        h1 { margin: 0 0 8px; color: #e8c96a; font-size: 25px; }
+        .subtitle { margin: 0 0 22px; color: #8ed1c5; }
+        label { display: block; margin: 12px 0 5px; text-align: left; color: #c8e5c0; }
+        input, button { box-sizing: border-box; width: 100%; padding: 11px; font: inherit; }
+        input { color: #f5f0d0; background: #10252c; border: 2px solid #5f8f87; }
+        button { margin-top: 18px; color: #17262d; background: #e8c96a; border: 0; cursor: pointer; font-weight: bold; }
+        button:hover { background: #fff0a8; }
+        .switch { margin-top: 15px; color: #8ed1c5; cursor: pointer; }
+        .message { min-height: 18px; margin-top: 14px; color: #f28b73; }
+        #game-root { display: none; }
+        canvas { image-rendering: pixelated; box-shadow: 0 0 0 4px #27444b, 10px 10px 0 #081016; }
+        @media (max-width: 520px) { body { align-items: flex-start; padding-top: 20px; } canvas { max-width: 100vw; height: auto !important; } }
+    </style>
+</head>
+<body>
+<main id="login-panel" class="login-panel">
+    <h1>MI PEQUEÑO MUNDO</h1>
+    <p class="subtitle">Explora las islas gigantes</p>
+    <form id="auth-form">
+        <label for="username">Entrenador</label>
+        <input id="username" maxlength="16" autocomplete="username" required>
+        <label for="password">Contraseña</label>
+        <input id="password" type="password" minlength="4" autocomplete="current-password" required>
+        <button id="auth-button" type="submit">INICIAR SESION</button>
+    </form>
+    <div id="auth-switch" class="switch">¿Nuevo entrenador? Registrate</div>
+    <div id="auth-message" class="message"></div>
+</main>
+<div id="game-root"></div>
+<script>
+// ---------- Registro e inicio de sesion local ----------
+const authForm = document.getElementById('auth-form');
+const authSwitch = document.getElementById('auth-switch');
+const authButton = document.getElementById('auth-button');
+const authMessage = document.getElementById('auth-message');
+let registering = false;
+let onlineSocket;
+
+function readUsers() {
+    try { return JSON.parse(localStorage.getItem('zafiro-users') || '{}'); }
+    catch (error) { return {}; }
+}
+
+authSwitch.addEventListener('click', () => {
+    registering = !registering;
+    authButton.textContent = registering ? 'REGISTRARME' : 'INICIAR SESION';
+    authSwitch.textContent = registering ? '¿Ya tienes cuenta? Inicia sesion' : '¿Nuevo entrenador? Registrate';
+    authMessage.textContent = '';
+});
+
+authForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const users = readUsers();
+    if (registering) {
+        if (users[username]) { authMessage.textContent = 'Ese entrenador ya existe.'; return; }
+        users[username] = password;
+        localStorage.setItem('zafiro-users', JSON.stringify(users));
+    } else if (users[username] !== password) {
+        authMessage.textContent = 'Entrenador o contraseña incorrectos.';
+        return;
+    }
+    localStorage.setItem('zafiro-current-user', username);
+    document.getElementById('login-panel').style.display = 'none';
+    document.getElementById('game-root').style.display = 'block';
+    startGame(username);
+});
+
+// ---------- Escena principal y mapa ----------
+class PuebloScene extends Phaser.Scene {
+    constructor() { super('PuebloScene'); }
+
+    preload() {
+        // El collage se procesa porque contiene sprites de tamaños distintos y etiquetas.
+        this.load.image('spritesheet', 'assets/spritesheet.png');
+    }
+
+    create() {
+        // Un mundo amplio, pero razonable para que funcione con fluidez en navegador.
+        this.worldSize = 5000;
+        this.physics.world.setBounds(0, 0, this.worldSize, this.worldSize);
+        this.prepareSpriteSheet();
+        this.drawWorld();
+        this.createPlayer();
+        this.createHud();
+        this.connectOnline();
+        this.cameras.main.setBounds(0, 0, this.worldSize, this.worldSize);
+        this.cameras.main.startFollow(this.player, true, 0.16, 0.16);
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT');
+    }
+
+    // Genera islas, caminos, rios, bosque y volcanes sin cargar imagenes externas.
+    drawWorld() {
+        this.add.rectangle(this.worldSize / 2, this.worldSize / 2, this.worldSize, this.worldSize, 0x1e3d59);
+        this.walls = this.physics.add.staticGroup();
+        for (let x = 500; x < this.worldSize; x += 1250) {
+            for (let y = 500; y < this.worldSize; y += 1250) {
+                this.add.rectangle(x, y, 900, 900, 0x4f9d64);
+                this.add.rectangle(x, y + 330, 900, 80, 0xc19a62);
+                this.add.rectangle(x - 330, y, 80, 900, 0xc19a62);
+                this.add.rectangle(x + 120, y - 170, 180, 140, 0x176b62);
+                this.addWall(x + 120, y - 170, 180, 140);
+                const river = this.add.rectangle(x + 300, y, 110, 900, 0x238cb0).setStrokeStyle(3, 0x8dd8d3);
+                this.walls.add(river);
+                this.add.rectangle(x + 280, y + 240, 150, 40, 0x8b3f2f);
+                this.createCabin(x - 180, y - 220);
+                this.decorateIsland(x, y);
+            }
+        }
+        this.add.text(2500, 110, 'MI PEQUEÑO MUNDO', { fontFamily: 'monospace', fontSize: '30px', color: '#fff0a8' }).setOrigin(0.5);
+        this.addWall(2500, 10, this.worldSize, 20); this.addWall(2500, 4990, this.worldSize, 20);
+        this.addWall(10, 2500, 20, this.worldSize); this.addWall(4990, 2500, 20, this.worldSize);
+    }
+
+    addWall(x, y, width, height) {
+        this.walls.add(this.add.rectangle(x, y, width, height, 0x355c50).setAlpha(0.01));
+    }
+
+    prepareSpriteSheet() {
+        const source = this.textures.get('spritesheet').getSourceImage();
+        const canvasTexture = this.textures.createCanvas('pixel-assets', source.width, source.height);
+        const context = canvasTexture.context;
+        context.drawImage(source, 0, 0);
+        const pixels = context.getImageData(0, 0, source.width, source.height);
+        for (let index = 0; index < pixels.data.length; index += 4) {
+            if (pixels.data[index] > 238 && pixels.data[index + 1] > 238 && pixels.data[index + 2] > 238) pixels.data[index + 3] = 0;
+        }
+        context.putImageData(pixels, 0, 0);
+        canvasTexture.refresh();
+        // Primer personaje de la columna CHARACTER del collage.
+        canvasTexture.add('player', 0, 25, 32, 50, 55);
+    }
+
+    createCabin(x, y) {
+        this.add.rectangle(x, y, 180, 110, 0xe9e2c0).setStrokeStyle(3, 0x473b46);
+        this.add.rectangle(x, y - 58, 195, 24, 0xd95858).setStrokeStyle(2, 0x473b46);
+        this.add.text(x, y - 58, 'CENTRO', { fontFamily: 'monospace', fontSize: '13px', color: '#fff4cf' }).setOrigin(0.5);
+        this.add.rectangle(x, y + 30, 25, 50, 0x6d4b51);
+        this.add.text(x, y + 30, 'P', { fontFamily: 'monospace', fontSize: '18px', color: '#fff4cf' }).setOrigin(0.5);
+        this.addWall(x - 95, y, 12, 110); this.addWall(x + 95, y, 12, 110); this.addWall(x, y - 65, 200, 12);
+    }
+
+    // Detalles visuales inspirados en los mapas rurales de las referencias.
+    decorateIsland(x, y) {
+        [[-300, -300], [330, -300], [-300, 300], [350, 300], [230, -280]].forEach(([offsetX, offsetY]) => {
+            this.add.rectangle(x + offsetX, y + offsetY + 30, 14, 34, 0x684632);
+            this.add.circle(x + offsetX, y + offsetY, 34, 0x236b45).setStrokeStyle(3, 0x164c38);
+            this.add.circle(x + offsetX - 16, y + offsetY + 8, 21, 0x328451);
+        });
+        for (let index = 0; index < 12; index += 1) {
+            const flowerX = x - 250 + ((index * 97) % 500);
+            const flowerY = y - 245 + ((index * 61) % 490);
+            this.add.circle(flowerX, flowerY, 3, index % 2 ? 0xf5d66c : 0xe5796d);
+        }
+        this.add.rectangle(x - 170, y + 250, 150, 90, 0x70462d).setStrokeStyle(3, 0x4d3426);
+        for (let row = 0; row < 3; row += 1) {
+            for (let column = 0; column < 5; column += 1) {
+                this.add.circle(x - 220 + column * 25, y + 220 + row * 25, 6, 0x72b83e);
+            }
+        }
+        this.add.rectangle(x - 40, y + 260, 8, 55, 0x7f542e);
+        this.add.triangle(x - 40, y + 235, -35, 0, 35, 0, 0, 28, 0xd56b42);
+    }
+
+    // El personaje usa fisica Arcade: bordes, agua y paredes bloquean el movimiento.
+    createPlayer() {
+        this.player = this.add.sprite(650, 650, 'pixel-assets', 'player').setScale(0.7);
+        this.physics.add.existing(this.player);
+        this.player.body.setCollideWorldBounds(true);
+        this.player.body.setSize(18, 25).setOffset(7, 20);
+        this.player.body.setMaxVelocity(320, 320);
+        this.physics.add.collider(this.player, this.walls);
+        this.physics.add.collider(this.player, this.lake);
+    }
+
+    // Socket.io comparte la posicion con todos los jugadores conectados.
+    connectOnline() {
+        this.remotePlayers = {};
+        onlineSocket = io();
+        onlineSocket.on('currentPlayers', (players) => {
+            Object.values(players).forEach((player) => {
+                if (player.id !== onlineSocket.id) this.addRemotePlayer(player);
+            });
+        });
+        onlineSocket.on('newPlayer', (player) => this.addRemotePlayer(player));
+        onlineSocket.on('playerUpdated', (player) => this.updateRemotePlayer(player));
+        onlineSocket.on('playerMoved', (player) => this.updateRemotePlayer(player));
+        onlineSocket.on('playerDisconnected', (id) => {
+            if (this.remotePlayers[id]) { this.remotePlayers[id].destroy(); delete this.remotePlayers[id]; }
+        });
+        onlineSocket.emit('playerJoin', { name: window.currentUser });
+        this.lastNetworkUpdate = 0;
+    }
+
+    addRemotePlayer(player) {
+        if (player.id === onlineSocket.id) return;
+        if (!this.remotePlayers[player.id]) {
+            const remote = this.add.sprite(player.x, player.y, 'pixel-assets', 'player').setScale(0.7).setTint(0x63d6cb);
+            remote.nameLabel = this.add.text(player.x, player.y - 35, player.name || 'Explorador', { fontFamily: 'monospace', fontSize: '11px', color: '#ffffff', backgroundColor: '#10252c' }).setOrigin(0.5);
+            this.remotePlayers[player.id] = remote;
+        }
+        this.updateRemotePlayer(player);
+    }
+
+    updateRemotePlayer(player) {
+        const remote = this.remotePlayers[player.id];
+        if (!remote) { this.addRemotePlayer(player); return; }
+        remote.setPosition(player.x, player.y);
+        remote.nameLabel.setPosition(player.x, player.y - 35).setText(player.name || 'Explorador');
+    }
+
+    createHud() {
+        const panel = this.add.rectangle(240, 294, 480, 36, 0x152b34, 0.94).setScrollFactor(0);
+        this.add.text(14, 286, `EXPLORADOR: ${window.currentUser}`, { fontFamily: 'monospace', fontSize: '12px', color: '#f5f0d0' }).setScrollFactor(0);
+        this.add.text(14, 303, 'FLECHAS / WASD  |  ISLAS: ' + this.worldSize + ' x ' + this.worldSize, { fontFamily: 'monospace', fontSize: '10px', color: '#8ed1c5' }).setScrollFactor(0);
+    }
+
+    update() {
+        const left = this.cursors.left.isDown || this.keys.A.isDown;
+        const right = this.cursors.right.isDown || this.keys.D.isDown;
+        const up = this.cursors.up.isDown || this.keys.W.isDown;
+        const down = this.cursors.down.isDown || this.keys.S.isDown;
+        const speed = this.keys.SHIFT.isDown ? 320 : 220;
+        this.player.body.setVelocity(
+            ((right ? 1 : 0) - (left ? 1 : 0)) * speed,
+            ((down ? 1 : 0) - (up ? 1 : 0)) * speed
+        );
+        if (this.player.body.velocity.x && this.player.body.velocity.y) this.player.body.velocity.scale(0.7);
+        if (onlineSocket && onlineSocket.connected && this.time.now > this.lastNetworkUpdate + 50) {
+            onlineSocket.emit('playerMovement', { x: this.player.x, y: this.player.y });
+            this.lastNetworkUpdate = this.time.now;
+        }
+    }
+}
+
+// ---------- Arranque del juego Phaser ----------
+function startGame(username) {
+    window.currentUser = username;
+    new Phaser.Game({
+        type: Phaser.AUTO,
+        parent: 'game-root',
+        width: 480,
+        height: 320,
+        pixelArt: true,
+        backgroundColor: '#5aa66a',
+        physics: { default: 'arcade', arcade: { debug: false } },
+        scene: [PuebloScene]
+    });
+}
+</script>
+</body>
+</html>
