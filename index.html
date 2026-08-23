@@ -125,6 +125,11 @@ class PuebloScene extends Phaser.Scene {
         this.load.image('resource_chest', 'assets/chest_common.svg');
         this.load.image('apple_tree_fruit', 'assets/apple_tree_fruit.svg');
         this.load.image('pine_tree', 'assets/pine_tree.svg');
+        this.load.image('tree_big', 'assets/tree_big.svg');
+        this.load.image('mountain', 'assets/mountain.svg');
+        this.load.image('house_wood', 'assets/house_wood.svg');
+        this.load.image('house_red', 'assets/house_red.svg');
+        this.load.image('house_tall', 'assets/house_tall.svg');
         this.load.image('fence', 'assets/fence.svg');
         this.load.image('flower', 'assets/flower.svg');
         this.load.image('rock', 'assets/rock.svg');
@@ -200,6 +205,7 @@ class PuebloScene extends Phaser.Scene {
         this.createCabin(5800, 5000, 'house', 'CABAÑA');
         this.createCabin(2700, 6200, 'market', 'AGRICULTOR');
         this.createCabin(6100, 6200, 'house', 'CASA');
+        this.createVillageComplex();
         this.createCityDistrict(1700, 1700);
         this.createCityDistrict();
 
@@ -239,23 +245,24 @@ class PuebloScene extends Phaser.Scene {
 
     createCityDistrict(centerX = 3150, centerY = 3350) {
         const buildings = [
-            [-600, -350, 'cottage', 'CASA'],
-            [-150, -350, 'house', 'CASA'],
-            [300, -350, 'cottage', 'CASA'],
+            [-600, -350, 'house_wood', 'CASA'],
+            [-150, -350, 'house_red', 'CASA'],
+            [300, -350, 'house_wood', 'CASA'],
             [-600, 250, 'market_stall', 'MERCADO'],
-            [-150, 250, 'cottage', 'CASA'],
-            [300, 250, 'cottage', 'CASA'],
+            [-150, 250, 'house_tall', 'CASA'],
+            [300, 250, 'house_red', 'CASA'],
             [-150, 850, 'well', 'POZO'],
             [700, 0, 'market_stall', 'PUESTO'],
-            [1050, -350, 'house', 'CASA'],
-            [1050, 250, 'cottage', 'CASA']
+            [1050, -350, 'house_tall', 'CASA'],
+            [1050, 250, 'house_wood', 'CASA']
         ];
 
         buildings.forEach(([offsetX, offsetY, key, label]) => {
             const x = centerX + offsetX;
             const y = centerY + offsetY;
             const sprite = this.add.image(x, y, key).setDepth(3);
-            sprite.setScale(key === 'market_stall' ? 1.15 : 1.05);
+            const scale = key === 'market_stall' ? 1.15 : key === 'well' ? 0.9 : 1.1;
+            sprite.setScale(scale);
             this.add.text(x, y - 52, label, { fontFamily: 'monospace', fontSize: '10px', color: '#fff0a8' }).setOrigin(0.5);
         });
 
@@ -265,6 +272,52 @@ class PuebloScene extends Phaser.Scene {
         this.add.image(centerX - 150, centerY, 'market_stall').setScale(1.05).setDepth(4);
         this.add.image(centerX + 150, centerY, 'well').setScale(0.85).setDepth(4);
         this.add.text(centerX, centerY + 330, 'CIUDAD DEL VALLE', { fontFamily: 'monospace', fontSize: '16px', color: '#fff0a8' }).setOrigin(0.5);
+    }
+
+    createVillageComplex() {
+        const centerX = 4200;
+        const centerY = 6400;
+        const road = this.add.rectangle(centerX, centerY, 2600, 180, 0xc9b792).setStrokeStyle(8, 0x7b5736);
+        road.setDepth(1);
+
+        const houses = [
+            [centerX - 900, centerY - 280, 'house_wood', 'CASA'],
+            [centerX - 420, centerY - 280, 'house_red', 'CASA'],
+            [centerX + 50, centerY - 280, 'house_tall', 'CASA'],
+            [centerX + 520, centerY - 280, 'house_wood', 'CASA'],
+            [centerX - 700, centerY + 120, 'market_stall', 'MERCADO'],
+            [centerX - 200, centerY + 120, 'house_tall', 'CASA'],
+            [centerX + 280, centerY + 120, 'house_red', 'CASA'],
+            [centerX + 760, centerY + 120, 'house_wood', 'CASA']
+        ];
+        houses.forEach(([x, y, key, label]) => {
+            const sprite = this.add.image(x, y, key).setDepth(3);
+            const scale = key === 'market_stall' ? 1.4 : 1.15;
+            sprite.setScale(scale);
+            this.add.text(x, y - 60, label, { fontFamily: 'monospace', fontSize: '10px', color: '#fff0a8' }).setOrigin(0.5);
+        });
+
+        const trees = [
+            [centerX - 1180, centerY - 500, 'tree_big'],
+            [centerX - 1100, centerY + 420, 'tree_big'],
+            [centerX + 1120, centerY - 520, 'tree_big'],
+            [centerX + 1180, centerY + 420, 'tree_big'],
+            [centerX - 1000, centerY + 650, 'pine_tree'],
+            [centerX + 980, centerY + 650, 'pine_tree']
+        ];
+        trees.forEach(([x, y, key]) => {
+            this.add.image(x, y, key).setScale(1.35).setDepth(2);
+        });
+
+        this.add.rectangle(centerX - 900, centerY + 500, 220, 120, 0x9ec2c9).setStrokeStyle(4, 0x4d6d74);
+        this.add.rectangle(centerX + 850, centerY + 500, 220, 120, 0x9ec2c9).setStrokeStyle(4, 0x4d6d74);
+        this.add.text(centerX, centerY - 520, 'ALDEA DEL NORTE', { fontFamily: 'monospace', fontSize: '18px', color: '#fff0a8' }).setOrigin(0.5);
+
+        for (let index = 0; index < 14; index += 1) {
+            const mountainX = 3000 + index * 270;
+            const mountainY = 5200 + (index % 2 === 0 ? 0 : 140);
+            this.add.image(mountainX, mountainY, 'mountain').setScale(1.7 + (index % 3) * 0.2).setDepth(0);
+        }
     }
 
     spawnSceneryProps() {

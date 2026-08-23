@@ -1,59 +1,59 @@
-const path = require('path');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: allowedOrigins.includes('*') ? true : allowedOrigins,
-        methods: ['GET', 'POST']
-    }
-});
+const basePort = Number(process.env.PORT || 3000);
+let jugadores = {};
 
-const PORT = process.env.PORT || 3000;
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || '*').split(',').map((origin) => origin.trim()).filter(Boolean);
-const players = new Map();
+const startServer = (port) => {
+  const app = express();
+  const server = http.createServer(app);
+  const io = new Server(server, {
+    cors: { origin: '*' }
+  });
 
-app.use(express.static(__dirname));
+  app.use(express.static(__dirname));
 
-app.get('/health', (_req, res) => {
-    res.json({ ok: true, players: players.size, port: PORT });
-});
+  io.on('connection', (socket) => {
+    console.log('jugador conectado:', socket.id);
+    socket.emit('jugadoresActuales', jugadores);
 
-io.on('connection', (socket) => {
-    players.set(socket.id, {
+    socket.on('nuevoJugador', (datos) => {
+      jugadores[socket.id] = {
         id: socket.id,
-        name: 'Explorador',
-        x: 650,
-        y: 650
+        nombre: datos?.nombre || 'jugador',
+        x: Number(datos?.x) || 0,
+        y: Number(datos?.y) || 0
+      };
+      socket.broadcast.emit('jugadorUnido', jugadores[socket.id]);
     });
 
-    socket.emit('currentPlayers', Object.fromEntries(players));
-    socket.broadcast.emit('newPlayer', players.get(socket.id));
-
-    socket.on('playerJoin', (data = {}) => {
-        const player = players.get(socket.id);
-        if (!player) return;
-        player.name = String(data.name || 'Explorador').slice(0, 16);
-        io.emit('playerUpdated', player);
-    });
-
-    socket.on('playerMovement', (movement = {}) => {
-        const player = players.get(socket.id);
-        if (!player) return;
-        if (Number.isFinite(movement.x)) player.x = Math.max(0, Math.min(8000, movement.x));
-        if (Number.isFinite(movement.y)) player.y = Math.max(0, Math.min(8000, movement.y));
-        socket.broadcast.emit('playerMoved', player);
+    socket.on('mover', (pos) => {
+      if (!jugadores[socket.id]) return;
+      jugadores[socket.id].x = Number(pos?.x) || jugadores[socket.id].x;
+      jugadores[socket.id].y = Number(pos?.y) || jugadores[socket.id].y;
+      socket.broadcast.emit('jugadorMovido', jugadores[socket.id]);
     });
 
     socket.on('disconnect', () => {
-        players.delete(socket.id);
-        io.emit('playerDisconnected', socket.id);
+      delete jugadores[socket.id];
+      io.emit('jugadorDesconectado', socket.id);
     });
-});
+  });
 
-server.listen(PORT, () => {
-    console.log(`Mi Pequeño Mundo online en http://localhost:${PORT}`);
-});
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      const nextPort = port + 1;
+      console.log(`Puerto ${port} ocupado, intentando ${nextPort}...`);
+      startServer(nextPort);
+      return;
+    }
+    throw error;
+  });
+
+  server.listen(port, () => {
+    console.log(`servidor corriendo en puerto ${port}`);
+  });
+};
+
+startServer(basePort);
